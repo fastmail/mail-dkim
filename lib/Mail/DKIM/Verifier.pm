@@ -191,6 +191,11 @@ sub add_signature {
     croak 'wrong number of arguments' unless ( @_ == 1 );
     my ($signature) = @_;
 
+    # Set verification time if we have one
+    if ($self->{verify_time}) {
+        $signature->{_verify_time} = $self->{verify_time};
+    }
+
     # ignore signature headers once we've seen 50 or so
     # this protects against abuse.
     return if ( @{ $self->{signatures} } > $MAX_SIGNATURES_TO_PROCESS );

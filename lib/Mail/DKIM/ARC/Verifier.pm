@@ -193,6 +193,11 @@ sub add_signature {
 
     return if $self->{result};    # already failed
 
+    # Set verification time if we have one
+    if ($self->{verify_time}) {
+        $signature->{_verify_time} = $self->{verify_time};
+    }
+
     push @{ $self->{signatures} }, $signature;
 
     unless ( $self->check_signature($signature) ) {

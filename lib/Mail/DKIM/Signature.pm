@@ -308,7 +308,6 @@ sub check_expiration {
     my $self = shift;
     my $x    = $self->expiration;
     return 1 if not defined $x;
-
     $self->{_verify_time} ||= time();
     return ( $self->{_verify_time} <= $x );
 }
