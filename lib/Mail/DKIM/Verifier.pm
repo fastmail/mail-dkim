@@ -193,7 +193,7 @@ sub add_signature {
 
     # Set verification time if we have one
     if ($self->{verify_time}) {
-        $signature->{_verify_time} = $self->{verify_time};
+        $signature->set_verify_time($self->{verify_time});
     }
 
     # ignore signature headers once we've seen 50 or so
