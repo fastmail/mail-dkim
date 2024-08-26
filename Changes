@@ -3,6 +3,8 @@ This file summarizes what's changed between releases of Mail-DKIM.
 {{$NEXT}}
   * Add missing Author prerequisite
     Thanks to Giovanni <g.bechis@snb.it>
+  * Option to pass a time to the Validator to assert the time
+    which should be considered as "now" for expiry checks
 
 1.20240619 2024-06-19 Australia/Melbourne
   * Remove version check for Net::DNS, this fixes issues when using a

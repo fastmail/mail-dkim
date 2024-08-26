@@ -301,6 +301,11 @@ sub check_canonicalization {
     return 1;
 }
 
+sub set_verify_time {
+    my ( $self, $verify_time ) = @_;
+    $self->{_verify_time} = $verify_time;
+}
+
 # checks whether the expiration time on this signature is acceptable
 # returns a true value if acceptable, false otherwise
 #
@@ -308,7 +313,6 @@ sub check_expiration {
     my $self = shift;
     my $x    = $self->expiration;
     return 1 if not defined $x;
-
     $self->{_verify_time} ||= time();
     return ( $self->{_verify_time} <= $x );
 }
