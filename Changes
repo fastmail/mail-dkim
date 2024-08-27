@@ -1,6 +1,8 @@
 This file summarizes what's changed between releases of Mail-DKIM.
 
 {{$NEXT}}
+
+1.20240827 2024-08-27 Australia/Melbourne
   * Add missing Author prerequisite
     Thanks to Giovanni <g.bechis@snb.it>
   * Option to pass a time to the Validator to assert the time
