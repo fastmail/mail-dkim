@@ -140,10 +140,10 @@ sub _convert_ed25519 {
         $cork = new Crypt::PK::Ed25519;
 
         # Prepend/append with PEM boilerplate
-        my $pem = "-----BEGIN ED25519 PRIVATE KEY-----\n";
+        my $pem = "-----BEGIN PRIVATE KEY-----\n";
         $pem .= $self->data;
         $pem .= "\n";
-        $pem .= "-----END ED25519 PRIVATE KEY-----\n";
+        $pem .= "-----END PRIVATE KEY-----\n";
 
         # Pass PEM text buffer
         $cork->import_key(\$pem)
