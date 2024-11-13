@@ -2,11 +2,13 @@
 
 use strict;
 use warnings;
-use Test::Simple tests => 24;
+use Test::Simple tests => 32;
 
 use Mail::DKIM::Signer;
 
-my $keyfile = -f "t/test.key" ? "t/test.key" : "test.key";
+my $tdir = -f "t/test.key" ? "t" : ".";
+my $keyfile = "$tdir/test.key";
+my $keyfile_ed = "$tdir/test.ed.key";
 my $policy;
 my $dkim;
 
@@ -148,6 +150,89 @@ ok( @multiple == 2, "got 2 signatures" );
 ok( $multiple[0]->as_string =~ /^DomainKey-Signature/,
     "first is DomainKeys signature" );
 ok( $multiple[1]->as_string =~ /^DKIM-Signature/, "second is DKIM signature" );
+
+# this policy should produce two DKIM signatures, one rsa and one ed25519
+$policy = sub {
+    my $signer = shift;
+    $signer->add_signature(
+        new Mail::DKIM::Signature(
+            Algorithm => "rsa-sha256",
+            Method    => "relaxed",
+            Headers   => $signer->headers,
+            Domain    => "different-domain.example",
+            Selector  => "beta",
+            Key       => Mail::DKIM::PrivateKey->load( Type => 'rsa',
+                                                       File => $keyfile),
+        )
+    );
+    $signer->add_signature(
+        new Mail::DKIM::Signature(
+            Algorithm => "ed25519-sha256",
+            Method    => "relaxed",
+            Headers   => $signer->headers,
+            Domain    => "different-domain.example",
+            Selector  => "gamma",
+            Key       => Mail::DKIM::PrivateKey->load( Type => 'ed25519',
+                                                       File => $keyfile_ed),
+        )
+    );
+};
+$dkim = sign_sample_using_args(
+    Policy  => $policy,
+);
+ok( $dkim, "processed message" );
+
+@multiple = $dkim->signatures;
+ok( @multiple == 2, "got 2 signatures" );
+
+print "# signature=" . $multiple[0]->as_string . "\n";
+ok( $multiple[0]->as_string =~ /a=rsa-sha256/,
+    "got expected algorithm in first signature" );
+
+print "# signature=" . $multiple[1]->as_string . "\n";
+ok( $multiple[1]->as_string =~ /a=ed25519-sha256/,
+    "got expected algorithm in second signature" );
+
+# same test but this time with Signer loading the private keys
+$policy = sub {
+    my $signer = shift;
+    my $sig =
+        new Mail::DKIM::Signature(
+            Algorithm => "rsa-sha256",
+            Method    => "relaxed",
+            Headers   => $signer->headers,
+            Domain    => "different-domain.example",
+            Selector  => "beta",
+        );
+    $sig->{KeyFile} = $keyfile;
+    $signer->add_signature($sig);
+
+    $sig =
+        new Mail::DKIM::Signature(
+            Algorithm => "ed25519-sha256",
+            Method    => "relaxed",
+            Headers   => $signer->headers,
+            Domain    => "different-domain.example",
+            Selector  => "gamma",
+        );
+    $sig->{KeyFile} = $keyfile_ed;
+    $signer->add_signature($sig);
+};
+$dkim = sign_sample_using_args(
+    Policy  => $policy,
+);
+ok( $dkim, "processed message" );
+
+@multiple = $dkim->signatures;
+ok( @multiple == 2, "got 2 signatures" );
+
+print "# signature=" . $multiple[0]->as_string . "\n";
+ok( $multiple[0]->as_string =~ /a=rsa-sha256/,
+    "got expected algorithm in first signature" );
+
+print "# signature=" . $multiple[1]->as_string . "\n";
+ok( $multiple[1]->as_string =~ /a=ed25519-sha256/,
+    "got expected algorithm in second signature" );
 
 sub sign_sample_using_args {
     my %args = @_;
