@@ -271,7 +271,6 @@ sub finish_header {
                 Domain    => $self->{'Domain'},
                 Selector  => $self->{'Selector'},
                 Key       => $self->{'Key'},
-                KeyFile   => $self->{'KeyFile'},
                 (
                     $self->{'Identity'} ? ( Identity => $self->{'Identity'} )
                     : ()
