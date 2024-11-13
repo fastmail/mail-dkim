@@ -314,9 +314,6 @@ sub finish_body {
         # finished canonicalizing
         $algorithm->finish_body;
 
-        my $type = 'rsa'; # default
-        $type = 'ed25519' if ( $self->{'Algorithm'} =~ /^ed25519/ );
-
         # load the private key file if necessary
         my $signature = $algorithm->signature;
         my $key =
@@ -325,6 +322,8 @@ sub finish_body {
           || $self->{Key}
           || $self->{KeyFile};
         if ( defined($key) && !ref($key) ) {
+            my $type = 'rsa'; # default
+            $type = 'ed25519' if ( $signature->algorithm =~ /^ed25519/ );
             $key = Mail::DKIM::PrivateKey->load( File => $key,
                 Type => $type );
         }
