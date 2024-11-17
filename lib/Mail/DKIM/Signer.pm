@@ -196,13 +196,9 @@ sub init {
         $self->{'Algorithm'} = 'rsa-sha1';
     }
 
-    my $type = 'rsa'; # default
-    $type = 'ed25519' if ( $self->{'Algorithm'} =~ /^ed25519/ );
-
     if ( defined $self->{KeyFile} ) {
         $self->{Key} ||=
-          Mail::DKIM::PrivateKey->load( File => $self->{KeyFile},
-            Type => $type );
+          load_private_key( $self->{KeyFile}, $self->{Algorithm} );
     }
 
     unless ( $self->{'Method'} ) {
@@ -275,7 +271,6 @@ sub finish_header {
                 Domain    => $self->{'Domain'},
                 Selector  => $self->{'Selector'},
                 Key       => $self->{'Key'},
-                KeyFile   => $self->{'KeyFile'},
                 (
                     $self->{'Identity'} ? ( Identity => $self->{'Identity'} )
                     : ()
@@ -314,19 +309,20 @@ sub finish_body {
         # finished canonicalizing
         $algorithm->finish_body;
 
-        my $type = 'rsa'; # default
-        $type = 'ed25519' if ( $self->{'Algorithm'} =~ /^ed25519/ );
-
         # load the private key file if necessary
         my $signature = $algorithm->signature;
-        my $key =
-             $signature->{Key}
-          || $signature->{KeyFile}
-          || $self->{Key}
-          || $self->{KeyFile};
-        if ( defined($key) && !ref($key) ) {
-            $key = Mail::DKIM::PrivateKey->load( File => $key,
-                Type => $type );
+        my $key = $signature->{Key} || $signature->{KeyFile};
+        if ( defined($key) ) {
+            if ( !ref($key) ) {
+                $key = load_private_key( $key, $signature->algorithm );
+            }
+        }
+        else {
+            $key = $self->{Key} || $self->{KeyFile};
+            if ( defined($key) && !ref($key) ) {
+                $key = load_private_key( $key, $self->{Algorithm} );
+                $self->{Key} = $key;
+            }
         }
         $key
           or die "no key available to sign with\n";
@@ -341,6 +337,17 @@ sub finish_body {
         $self->{signature} = $signature;
         $self->{result}    = 'signed';
     }
+}
+
+# Load a private key file for the given algorithm.
+sub load_private_key {
+    my $key_file = shift;
+    my $algorithm = shift;
+
+    my $type = 'rsa'; # default
+    $type = 'ed25519' if ( $algorithm =~ /^ed25519/ );
+
+    return Mail::DKIM::PrivateKey->load( File => $key_file, Type => $type );
 }
 
 =head1 METHODS
