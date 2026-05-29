@@ -44,37 +44,53 @@ sub init {
 sub PRINT {
     my $self    = shift;
     my $buf_ref = $self->{buf_ref};
-    $$buf_ref .= @_ == 1 ? $_[0] : join( '', @_ ) if @_;
+
+    if ( $$buf_ref eq '' ) {
+        $self->{buf_ref} = $buf_ref = @_ == 1 ? \$_[0] : \join( '', @_ );
+    } else {
+        $$buf_ref .= @_ == 1 ? $_[0] : join( '', @_ );
+    }
 
     if ( $self->{in_header} ) {
-        local $1;    # avoid polluting a global $1
-        while ( $$buf_ref ne '' ) {
-            if ( substr( $$buf_ref, 0, 2 ) eq "\015\012" ) {
-                substr( $$buf_ref, 0, 2 ) = '';
+        my $pos = 0;
+        my $len = length($$buf_ref);
+        local $1;
+
+        while ( $pos < $len ) {
+            pos($$buf_ref) = $pos;
+            if ( $$buf_ref !~ /\G(.*?\015\012)[^\ \t]/s ) {
+                last;
+            }
+            if ( length($1) == 2 ) {
+                # blank line = end of headers
+                my $body_start = $pos + 2;
                 $self->finish_header();
                 $self->{in_header} = 0;
-                last;
+
+                # process completed body lines and buffer remainder
+                my $j = rindex( $$buf_ref, "\015\012" );
+                if ( $j >= $body_start ) {
+                    $self->add_body( substr( $$buf_ref, $body_start,
+                        $j + 2 - $body_start ) );
+                    $$buf_ref = substr( $$buf_ref, $j + 2 );
+                } else {
+                    $$buf_ref = substr( $$buf_ref, $body_start );
+                }
+                return 1;
             }
-            if ( $$buf_ref !~ /^(.+?\015\012)[^\ \t]/s ) {
-                last;
-            }
-            my $header = $1;
-            $self->add_header($header);
-            substr( $$buf_ref, 0, length($header) ) = '';
+            $self->add_header($1);
+            $pos += length($1);
         }
+        # buffer remaining header line
+        $$buf_ref = $pos ? substr( $$buf_ref, $pos ) : '';
     }
 
     if ( !$self->{in_header} ) {
         my $j = rindex( $$buf_ref, "\015\012" );
         if ( $j >= 0 ) {
-
-            # avoid copying a large buffer: the unterminated
-            # last line is typically short compared to the rest
-
-            my $carry = substr( $$buf_ref, $j + 2 );
-            substr( $$buf_ref, $j + 2 ) = '';    # shrink to last CRLF
-            $self->add_body($$buf_ref);          # must end on CRLF
-            $$buf_ref = $carry;    # restore unterminated last line
+            # process completed body lines and buffer remainder
+            $self->add_body( substr( $$buf_ref, 0, $j + 2 ) );
+            $$buf_ref = substr( $$buf_ref, $j + 2 );
         }
     }
     return 1;
