@@ -6,7 +6,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 11;
+use Test::More tests => 13;
 use Time::HiRes qw(time);
 
 use Mail::DKIM::ARC::Verifier;
@@ -85,3 +85,10 @@ like( $arc->{details}, qr/Duplicate ARC-Authentication-Results header 1\b/,
 $arc = verify( "arc-authentication-results:\n i=1 ; x\n" . arc_set(1) . $BODY );
 like( $arc->{details}, qr/Duplicate ARC-Authentication-Results header 1\b/,
     'folded AAR in another case is a duplicate' );
+
+## Verifier: a chain at the 50 set limit is not too slow
+
+$t   = time;
+$arc = verify( join( '', map { arc_set($_) } reverse 1 .. 50 ) . $BODY );
+ok( time - $t < 5, '50 ARC sets verify in reasonable time' );
+isnt( $arc->result, 'pass', '50 bogus ARC sets do not pass' );
