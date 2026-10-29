@@ -14,6 +14,9 @@ This file summarizes what's changed between releases of Mail-DKIM.
     dying, and matches ARC header names case insensitively
   * ARC-Seal canonicalization takes the ARC-Authentication-Results
     instance from the start of the field
+  * ARC verifier fails a chain with a missing or extra
+    ARC-Authentication-Results header, and no longer warns about a
+    missing cv= tag
 
 1.20240923 2024-09-23 Australia/Melbourne
   * Fix loading of ED25519 keys with CryptX-0.081

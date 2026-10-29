@@ -474,6 +474,7 @@ sub finish_header {
             $aars{$i} = $hdr;
         }
     }
+    $self->{aars} = \%aars;
 
     foreach my $algorithm ( @{ $self->{algorithms} } ) {
         $algorithm->finish_header(
@@ -601,6 +602,7 @@ sub finish_body {
 
     my $seals    = $self->{seals}    || [];
     my $messages = $self->{messages} || [];
+    my $aars     = $self->{aars}     || {};
     unless ( @$seals or @$messages ) {
         $self->{result}  = 'none';
         $self->{details} = 'no ARC headers found';
@@ -634,6 +636,13 @@ sub finish_body {
         return;
     }
 
+    my ($max_aar) = sort { $b <=> $a } keys %$aars;
+    if ( defined $max_aar and $max_aar > $#$seals ) {
+        $self->{result}  = 'fail';
+        $self->{details} = 'missing Arc-Seal ' . $max_aar;
+        return;
+    }
+
     foreach my $i ( 1 .. $#$seals ) {
 
 # XXX - we should error if it's already present, but that's done above if at all
@@ -645,6 +654,11 @@ sub finish_body {
         if ( !$messages->[$i] ) {
             $self->{result}  = 'fail';
             $self->{details} = "missing ARC-Message-Signature $i";
+            return;
+        }
+        if ( !$aars->{$i} ) {
+            $self->{result}  = 'fail';
+            $self->{details} = "missing ARC-Authentication-Results $i";
             return;
         }
     }
@@ -671,7 +685,7 @@ sub finish_body {
     }
     foreach my $i ( 2 .. $#$seals ) {
         my $cv = $seals->[$i]->get_tag('cv');
-        if ( $cv ne 'pass' ) {
+        if ( !defined $cv or $cv ne 'pass' ) {
             $self->{signature} = $seals->[$i]->signature;
             $self->{result}    = 'fail';
             $self->{details}   = "wrong cv for ARC-Seal i=$i";

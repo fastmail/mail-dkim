@@ -6,12 +6,13 @@
 
 use strict;
 use warnings;
-use Test::More tests => 27;
+use Test::More tests => 33;
 use Time::HiRes qw(time);
 
 use Mail::DKIM::ARC::Verifier;
 use Mail::DKIM::ARC::Signer;
 use Mail::DKIM::ARC::Seal;
+use Mail::DKIM::ARC::MessageSignature;
 use Mail::DKIM::Canonicalization::seal;
 
 my $tdir    = -f "t/test.key" ? "t" : ".";
@@ -167,4 +168,41 @@ like( $arc->result_detail, qr/ARC header seen before Authentication-Results/,
     $canon->finish_header( Headers => [ $aar, sprintf( $AMS, 1 ) . "\015\012" ] );
     like( $canon->result, qr/^arc-authentication-results:i=1; example\.com;.*i=7\015\012/m,
         'AAR i=1 quoting "; i=7" is sealed as instance 1' );
+}
+
+## Verifier: every set needs all three ARC headers
+
+$arc = verify( sprintf( $AMS, 1 ) . "\n" . sprintf( $AS, 1, 'none' ) . "\n" . $BODY );
+is( $arc->result, 'fail', 'set without AAR fails' );
+like( $arc->{details}, qr/missing ARC-Authentication-Results 1/,
+    'set without AAR is reported' );
+
+$arc = verify( sprintf( $AAR, 2 ) . "\n" . arc_set(1) . $BODY );
+is( $arc->result, 'fail', 'AAR beyond the last seal fails' );
+like( $arc->{details}, qr/missing Arc-Seal 2/, 'AAR i=2 without seal 2' );
+
+## Verifier: a seal without cv= fails without warnings
+#  (the chain logic is driven directly, since reaching it needs seals that
+#  verify)
+
+{
+    my @warnings;
+    local $SIG{__WARN__} = sub { push @warnings, @_ };
+
+    my $v = Mail::DKIM::ARC::Verifier->new;
+    for my $i ( 1, 2 ) {
+        my $as = Mail::DKIM::ARC::Seal->parse(
+            sprintf( 'ARC-Seal: i=%d; a=rsa-sha256; %sd=example.com; s=s; b=AAAA',
+                $i, $i == 1 ? 'cv=none; ' : '' ) );
+        my $ams = Mail::DKIM::ARC::MessageSignature->parse( sprintf( $AMS, $i ) );
+        $_->result('pass') for $as, $ams;
+        $v->{seals}[$i]    = $as;
+        $v->{messages}[$i] = $ams;
+        $v->{aars}{$i}     = sprintf( $AAR, $i );
+    }
+    $v->{algorithms} = [];
+    $v->finish_body;
+    like( $v->{details}, qr/wrong cv for ARC-Seal i=2/, 'seal 2 without cv= fails' );
+    is( scalar @warnings, 0, 'seal without cv= gives no warnings' )
+      or diag @warnings;
 }
