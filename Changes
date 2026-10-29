@@ -9,6 +9,7 @@ This file summarizes what's changed between releases of Mail-DKIM.
   * Speed up ARC-Seal canonicalization for long ARC chains
   * Check ARC instance numbers in the ARC signer, and limit it to 50
     ARC sets
+  * Speed up DKIM header canonicalization for long h= lists
 
 1.20240923 2024-09-23 Australia/Melbourne
   * Fix loading of ED25519 keys with CryptX-0.081

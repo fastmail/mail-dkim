@@ -54,33 +54,27 @@ sub finish_header {
         die "Error: h= tag is required for this canonicalization\n";
     }
 
+    # group the message headers by name, keeping the bottom-up order,
+    # so each name in h= costs one lookup rather than a scan of the header
+    my %heads;
+    foreach my $hdr (@mess_headers) {
+        next unless $hdr =~ /^([^\s:]+)\s*:/;
+        push @{ $heads{ lc $1 } }, $hdr;
+    }
+
     # iterate through the header field names specified in the signature
     my @sig_headers = $self->{Signature}->headerlist;
     foreach my $hdr_name (@sig_headers) {
-        $hdr_name = lc $hdr_name;
 
-        # find the specified header in the message
-      inner_loop:
-        for ( my $i = 0 ; $i < @mess_headers ; $i++ ) {
-            my $hdr = $mess_headers[$i];
+        # find the specified header in the message, and remove it from our
+        # list, so if it occurs more than once, we'll get the next header
+        # in line
+        my $list = $heads{ lc $hdr_name } or next;
+        my $hdr  = shift @$list;
+        next unless defined $hdr;
 
-            if ( $hdr =~ /^([^\s:]+)\s*:/ ) {
-                my $key = lc $1;
-                if ( $key eq $hdr_name ) {
-
-                    # found it
-
-                    # remove it from our list, so if it occurs more than
-                    # once, we'll get the next header in line
-                    splice @mess_headers, $i, 1;
-
-                    $hdr =~ s/\015\012\z//s;
-                    $self->output(
-                        $self->canonicalize_header($hdr) . "\015\012" );
-                    last inner_loop;
-                }
-            }
-        }
+        $hdr =~ s/\015\012\z//s;
+        $self->output( $self->canonicalize_header($hdr) . "\015\012" );
     }
 }
 

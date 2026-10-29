@@ -1,0 +1,55 @@
+#!/usr/bin/perl -I../lib
+
+# the h= list comes from the message, so check that a long one can't make
+# header canonicalization slow, and that indexing the header fields by name
+# picks the same fields as before
+
+use strict;
+use warnings;
+use Test::More tests => 3;
+use Time::HiRes qw(time);
+
+use Mail::DKIM::Verifier;
+use Mail::DKIM::Signature;
+use Mail::DKIM::Canonicalization::simple;
+
+## fields are taken bottom-up, once each, in h= order
+
+my $signature = Mail::DKIM::Signature->parse(
+    'DKIM-Signature: h=from:x:to:FROM:from:subject:missing; s=test; d=example.org; b=');
+my $canon = Mail::DKIM::Canonicalization::simple->new( Signature => $signature );
+my @headers = (
+    "From: first\015\012",
+    "To: someone\015\012",
+    "x : spaced\015\012",
+    "not a header field\015\012",
+    "from: second\015\012",
+    "Subject: hi\015\012",
+);
+$canon->finish_header( Headers => \@headers );
+
+my $expected = join '', "from: second\015\012", "x : spaced\015\012",
+  "To: someone\015\012", "From: first\015\012", "Subject: hi\015\012";
+is( $canon->result, $expected, 'h= picks the right header fields' );
+
+## a long h= list and many header fields stay quick
+
+{
+    no warnings 'redefine';
+    *Mail::DKIM::DNS::query = sub { return () };
+}
+
+my $hlist = join ':', ('x') x 2000;
+my $msg = join( '',
+    map { "DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=example$_.com; s=s; h=$hlist; bh=AAAA; b=AAAA\n" }
+      1 .. 10 )
+  . join( '', map { "X-H$_: y\n" } 1 .. 2000 )
+  . "From: a\@example.com\n\nhi\n";
+$msg =~ s/\n/\015\012/g;
+
+my $dkim = Mail::DKIM::Verifier->new;
+my $t    = time;
+$dkim->PRINT($msg);
+$dkim->CLOSE;
+ok( time - $t < 5, '10 signatures with 2000 h= names over 2000 fields is quick' );
+isnt( $dkim->result, 'pass', 'and does not pass' );
