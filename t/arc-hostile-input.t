@@ -1,12 +1,12 @@
 #!/usr/bin/perl -I../lib
 
-# ARC instance numbers and ARC-Authentication-Results fields come from
-# the message, so check they can't make the verifier or signer use time
-# or memory in proportion to a number in the header
+# ARC headers come from the message, so check that hostile ones can't
+# make the verifier or signer use time or memory in proportion to a
+# number in the header, make the signer die, or confuse the chain checks
 
 use strict;
 use warnings;
-use Test::More tests => 21;
+use Test::More tests => 26;
 use Time::HiRes qw(time);
 
 use Mail::DKIM::ARC::Verifier;
@@ -132,3 +132,24 @@ $arc = sign( $AR . join( '', map { arc_set($_) } reverse 1 .. 50 ) . $BODY );
 is( $arc->result, 'skipped', 'signer will not add a 51st ARC set' );
 like( $arc->result_detail, qr/Too many ARC sets/,
     'signer: too many ARC sets' );
+
+## Signer: unparseable ARC headers skip the message rather than die
+
+$arc = eval { sign( $AR . "ARC-Seal: i=1; garbage\n" . $BODY ) };
+is( $arc && $arc->result, 'skipped', 'signer skips an unparseable ARC-Seal' );
+like( $arc && $arc->result_detail, qr/Unparseable ARC-Seal header/,
+    'signer: unparseable ARC-Seal is reported' );
+
+$arc = eval { sign( $AR . "ARC-Message-Signature: i=1; garbage\n" . $BODY ) };
+is( $arc && $arc->result,
+    'skipped', 'signer skips an unparseable ARC-Message-Signature' );
+
+## Signer: ARC header names are not case sensitive
+
+$arc = sign( $AR . lc( sprintf( $AS, 1000000000, 'none' ) ) . "\n" . $BODY );
+like( $arc->result_detail, qr/Invalid ARC-Seal instance/,
+    'signer sees a lowercase arc-seal' );
+
+$arc = sign( lc( arc_set(1) ) . $AR . $BODY );
+like( $arc->result_detail, qr/ARC header seen before Authentication-Results/,
+    'signer sees lowercase ARC headers before Authentication-Results' );

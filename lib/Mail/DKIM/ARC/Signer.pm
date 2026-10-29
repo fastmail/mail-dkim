@@ -254,6 +254,25 @@ sub _valid_instance {
       && $i <= $Mail::DKIM::Canonicalization::seal::MAX_INSTANCE;
 }
 
+# ARC headers come from the message, so may not parse; skip the message
+# rather than die
+sub _parse_arc_header {
+    my ( $self, $class, $header ) = @_;
+    my $parsed;
+    eval {
+        local $SIG{__DIE__};
+        $parsed = $class->parse($header);
+        1;
+    } || do {
+        chomp( my $E = $@ );
+        ( my $name = $header ) =~ s/:.*//s;
+        $self->{result}  = 'skipped';
+        $self->{details} = "Unparseable $name header: $E";
+        return;
+    };
+    return $parsed;
+}
+
 sub finish_header {
     my $self = shift;
 
@@ -301,7 +320,7 @@ sub finish_header {
         else {
             # parse ARC headers to make sure we have completeness
 
-            if ( $header =~ m/^ARC-/ ) {
+            if ( $header =~ m/^ARC-/i ) {
                 if ( !$ar ) {
                     $self->{result} = 'skipped';
                     $self->{details} =
@@ -317,8 +336,10 @@ sub finish_header {
 
             }
 
-            if ( $header =~ m/^ARC-Seal:/ ) {
-                my $seal = Mail::DKIM::ARC::Seal->parse($header);
+            if ( $header =~ m/^ARC-Seal:/i ) {
+                my $seal =
+                  $self->_parse_arc_header( 'Mail::DKIM::ARC::Seal', $header )
+                  or return;
                 my $i    = $seal->instance;
                 unless ( _valid_instance($i) ) {
                     $self->{result}  = 'skipped';
@@ -333,8 +354,10 @@ sub finish_header {
                 }
                 $as[$i] = $seal;
             }
-            elsif ( $header =~ m/^ARC-Message-Signature:/ ) {
-                my $sig = Mail::DKIM::ARC::MessageSignature->parse($header);
+            elsif ( $header =~ m/^ARC-Message-Signature:/i ) {
+                my $sig = $self->_parse_arc_header(
+                    'Mail::DKIM::ARC::MessageSignature', $header )
+                  or return;
                 my $i   = $sig->instance;
                 unless ( _valid_instance($i) ) {
                     $self->{result} = 'skipped';
@@ -351,7 +374,7 @@ sub finish_header {
                 }
                 $ams[$i] = $sig;
             }
-            elsif ( $header =~ m/^ARC-Authentication-Results:\s*i=(\d+)/ ) {
+            elsif ( $header =~ m/^ARC-Authentication-Results:\s*i=(\d+)/i ) {
                 my $i = $1;
                 unless ( _valid_instance($i) ) {
                     $self->{result} = 'skipped';
