@@ -205,7 +205,85 @@ sub add_signature {
         return;
     }
 
+ # check for bogus tags (should be done much earlier but better late than never)
+ # tagkeys is uniq'd via a hash, rawtaglen counts all the tags
+    my @tagkeys   = keys %{ $signature->{tags_by_name} };
+    my $rawtaglen = $#{ $signature->{tags} };
+
+    # crock: ignore empty clause after trailing semicolon
+    $rawtaglen--
+      if $signature->{tags}->[ $#{ $signature->{tags} } ]->{raw} =~ /^\s*$/;
+
+    # duplicate tags
+    if ( $rawtaglen != $#tagkeys ) {
+        $self->{result}  = 'fail';                         # bogus
+        $self->{details} = 'Duplicate tag in signature';
+        return;
+    }
+
+    # invalid tag name
+    if ( grep { !m{[a-z][a-z0-9_]*}i } @tagkeys ) {
+        $self->{result}  = 'fail';                         # bogus
+        $self->{details} = 'Invalid tag in signature';
+        return;
+    }
+
+    # the instance this signature will be saved at, once it has been set up
+    my ( $set, $instance );
+
+    if ( $signature->isa('Mail::DKIM::ARC::Seal') ) {
+        $instance = $signature->instance() || '';
+
+        if ( $instance !~ m{^\d+$} or $instance < 1 or $instance > $MAX_SIGNATURES_TO_PROCESS ) {
+            $self->{result}  = 'fail';                                   # bogus
+            $self->{details} = sprintf "Invalid ARC-Seal instance '%s'",
+              $instance;
+            return;
+        }
+
+        if ( $self->{seals}[$instance] ) {
+            $self->{result} = 'fail';                                    # dup
+            if ( $signature eq $self->{seals}[$instance] ) {
+                $self->{details} = sprintf 'Duplicate ARC-Seal %d', $instance;
+            }
+            else {
+                $self->{details} = sprintf 'Redundant ARC-Seal %d', $instance;
+            }
+            return;
+        }
+
+        $set = 'seals';
+    }
+    elsif ( $signature->isa('Mail::DKIM::ARC::MessageSignature') ) {
+        $instance = $signature->instance() || '';
+
+        if ( $instance !~ m{^\d+$} or $instance < 1 or $instance > $MAX_SIGNATURES_TO_PROCESS ) {
+            $self->{result} = 'fail';    # bogus
+            $self->{details} =
+              sprintf "Invalid ARC-Message-Signature instance '%s'", $instance;
+            return;
+        }
+
+        if ( $self->{messages}[$instance] ) {
+            $self->{result} = 'fail';    # dup
+            if ( $signature->as_string() eq
+                $self->{messages}[$instance]->as_string() )
+            {
+                $self->{details} = sprintf 'Duplicate ARC-Message-Signature %d',
+                  $instance;
+            }
+            else {
+                $self->{details} = sprintf 'Redundant ARC-Message-Signature %d',
+                  $instance;
+            }
+            return;
+        }
+        $set = 'messages';
+    }
+
     # signature looks ok, go ahead and query for the public key
+    # (only now that the tags and instance number have been checked, so a
+    # bogus signature costs neither a DNS query nor a canonicalization)
     $signature->fetch_public_key;
 
     # create a canonicalization filter and algorithm
@@ -232,79 +310,9 @@ sub add_signature {
     $self->{algorithms} ||= [];
     push @{ $self->{algorithms} }, $algorithm;
 
- # check for bogus tags (should be done much earlier but better late than never)
- # tagkeys is uniq'd via a hash, rawtaglen counts all the tags
-    my @tagkeys   = keys %{ $signature->{tags_by_name} };
-    my $rawtaglen = $#{ $signature->{tags} };
-
-    # crock: ignore empty clause after trailing semicolon
-    $rawtaglen--
-      if $signature->{tags}->[ $#{ $signature->{tags} } ]->{raw} =~ /^\s*$/;
-
-    # duplicate tags
-    if ( $rawtaglen != $#tagkeys ) {
-        $self->{result}  = 'fail';                         # bogus
-        $self->{details} = 'Duplicate tag in signature';
-        return;
-    }
-
-    # invalid tag name
-    if ( grep { !m{[a-z][a-z0-9_]*}i } @tagkeys ) {
-        $self->{result}  = 'fail';                         # bogus
-        $self->{details} = 'Invalid tag in signature';
-        return;
-    }
-
-    if ( $signature->isa('Mail::DKIM::ARC::Seal') ) {
-        my ($instance);
-        $instance = $signature->instance() || '';
-
-        if ( $instance !~ m{^\d+$} or $instance < 1 or $instance > $MAX_SIGNATURES_TO_PROCESS ) {
-            $self->{result}  = 'fail';                                   # bogus
-            $self->{details} = sprintf "Invalid ARC-Seal instance '%s'",
-              $instance;
-            return;
-        }
-
-        if ( $self->{seals}[$instance] ) {
-            $self->{result} = 'fail';                                    # dup
-            if ( $signature eq $self->{seals}[$instance] ) {
-                $self->{details} = sprintf 'Duplicate ARC-Seal %d', $instance;
-            }
-            else {
-                $self->{details} = sprintf 'Redundant ARC-Seal %d', $instance;
-            }
-            return;
-        }
-
-        $self->{seals}[$instance] = $signature;
-    }
-    elsif ( $signature->isa('Mail::DKIM::ARC::MessageSignature') ) {
-        my $instance = $signature->instance() || '';
-
-        if ( $instance !~ m{^\d+$} or $instance < 1 or $instance > $MAX_SIGNATURES_TO_PROCESS ) {
-            $self->{result} = 'fail';    # bogus
-            $self->{details} =
-              sprintf "Invalid ARC-Message-Signature instance '%s'", $instance;
-            return;
-        }
-
-        if ( $self->{messages}[$instance] ) {
-            $self->{result} = 'fail';    # dup
-            if ( $signature->as_string() eq
-                $self->{messages}[$instance]->as_string() )
-            {
-                $self->{details} = sprintf 'Duplicate ARC-Message-Signature %d',
-                  $instance;
-            }
-            else {
-                $self->{details} = sprintf 'Redundant ARC-Message-Signature %d',
-                  $instance;
-            }
-            return;
-        }
-        $self->{messages}[$instance] = $signature;
-    }
+    # fetch_public_key dies on an unusable selector or domain, so only now
+    # save the signature for the chain checks
+    $self->{$set}[$instance] = $signature if $set;
 }
 
 sub check_signature {

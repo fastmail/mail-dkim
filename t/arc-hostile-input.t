@@ -6,7 +6,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 10;
+use Test::More tests => 11;
 use Time::HiRes qw(time);
 
 use Mail::DKIM::ARC::Verifier;
@@ -48,12 +48,14 @@ sub verify {
 
 ## Verifier: a seal with a huge instance fails without canonicalizing
 
+$dns_queries = 0;
 my $t   = time;
 my $arc = verify( sprintf( $AS, 1000000000, 'none' ) . "\n" . $BODY );
 ok( time - $t < 2, 'ARC-Seal i=1000000000 is quick' );
 is( $arc->result, 'fail', 'ARC-Seal i=1000000000 fails' );
 like( $arc->{details}, qr/Invalid ARC-Seal instance '1000000000'/,
     'ARC-Seal i=1000000000 is an invalid instance' );
+is( $dns_queries, 0, 'no key lookup for an invalid instance' );
 
 $t   = time;
 $arc = verify(
