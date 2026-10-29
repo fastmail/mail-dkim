@@ -6,7 +6,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 13;
+use Test::More tests => 21;
 use Time::HiRes qw(time);
 
 use Mail::DKIM::ARC::Verifier;
@@ -41,6 +41,22 @@ sub verify {
     my ($msg) = @_;
     $msg =~ s/\n/\015\012/g;
     my $arc = Mail::DKIM::ARC::Verifier->new;
+    $arc->PRINT($msg);
+    $arc->CLOSE;
+    return $arc;
+}
+
+sub sign {
+    my ($msg) = @_;
+    $msg =~ s/\n/\015\012/g;
+    my $arc = Mail::DKIM::ARC::Signer->new(
+        Algorithm => 'rsa-sha256',
+        Domain    => 'example.org',
+        SrvId     => 'example.org',
+        Selector  => 'test',
+        Chain     => 'ar',
+        KeyFile   => $keyfile,
+    );
     $arc->PRINT($msg);
     $arc->CLOSE;
     return $arc;
@@ -92,3 +108,27 @@ $t   = time;
 $arc = verify( join( '', map { arc_set($_) } reverse 1 .. 50 ) . $BODY );
 ok( time - $t < 5, '50 ARC sets verify in reasonable time' );
 isnt( $arc->result, 'pass', '50 bogus ARC sets do not pass' );
+
+## Signer: instance numbers are checked before use
+
+my $AR = "Authentication-Results: example.org; arc=none\n";
+
+$arc = sign( $AR . sprintf( $AS, 1000000000, 'none' ) . "\n" . $BODY );
+is( $arc->result, 'skipped', 'signer skips ARC-Seal i=1000000000' );
+like( $arc->result_detail, qr/Invalid ARC-Seal instance/,
+    'signer: ARC-Seal i=1000000000 is an invalid instance' );
+
+$arc = sign( $AR . sprintf( $AMS, 1000000000 ) . "\n" . $BODY );
+is( $arc->result, 'skipped', 'signer skips ARC-Message-Signature i=1000000000' );
+like( $arc->result_detail, qr/Invalid ARC-Message-Signature instance/,
+    'signer: ARC-Message-Signature i=1000000000 is an invalid instance' );
+
+$arc = sign( $AR . sprintf( $AAR, 1000000000 ) . "\n" . $BODY );
+is( $arc->result, 'skipped', 'signer skips AAR i=1000000000' );
+like( $arc->result_detail, qr/Invalid ARC-Authentication-Results instance/,
+    'signer: AAR i=1000000000 is an invalid instance' );
+
+$arc = sign( $AR . join( '', map { arc_set($_) } reverse 1 .. 50 ) . $BODY );
+is( $arc->result, 'skipped', 'signer will not add a 51st ARC set' );
+like( $arc->result_detail, qr/Too many ARC sets/,
+    'signer: too many ARC sets' );

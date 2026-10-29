@@ -13,6 +13,7 @@ use warnings;
 use Mail::DKIM::PrivateKey;
 use Mail::DKIM::ARC::MessageSignature;
 use Mail::DKIM::ARC::Seal;
+use Mail::DKIM::Canonicalization::seal;
 use Mail::AuthenticationResults::Parser;
 use Mail::AuthenticationResults::Header::AuthServID;
 
@@ -243,6 +244,16 @@ sub init {
       unless $self->{Chain} and $self->{Chain} =~ m{^(pass|fail|none|ar)$};
 }
 
+# instance numbers come from the message, and index the arrays below,
+# so check them before use
+sub _valid_instance {
+    my ($i) = @_;
+    return defined $i
+      && $i =~ m{^\d+$}
+      && $i >= 1
+      && $i <= $Mail::DKIM::Canonicalization::seal::MAX_INSTANCE;
+}
+
 sub finish_header {
     my $self = shift;
 
@@ -309,6 +320,12 @@ sub finish_header {
             if ( $header =~ m/^ARC-Seal:/ ) {
                 my $seal = Mail::DKIM::ARC::Seal->parse($header);
                 my $i    = $seal->instance;
+                unless ( _valid_instance($i) ) {
+                    $self->{result}  = 'skipped';
+                    $self->{details} = sprintf "Invalid ARC-Seal instance '%s'",
+                      defined $i ? $i : '';
+                    return;
+                }
                 if ( $as[$i] ) {
                     $self->{result}        = 'skipped';
                     $self->{details} = "Duplicate ARC-Seal $i";
@@ -319,6 +336,13 @@ sub finish_header {
             elsif ( $header =~ m/^ARC-Message-Signature:/ ) {
                 my $sig = Mail::DKIM::ARC::MessageSignature->parse($header);
                 my $i   = $sig->instance;
+                unless ( _valid_instance($i) ) {
+                    $self->{result} = 'skipped';
+                    $self->{details} =
+                      sprintf "Invalid ARC-Message-Signature instance '%s'",
+                      defined $i ? $i : '';
+                    return;
+                }
                 if ( $ams[$i] ) {
                     $self->{result} = 'skipped';
                     $self->{details} =
@@ -329,6 +353,12 @@ sub finish_header {
             }
             elsif ( $header =~ m/^ARC-Authentication-Results:\s*i=(\d+)/ ) {
                 my $i = $1;
+                unless ( _valid_instance($i) ) {
+                    $self->{result} = 'skipped';
+                    $self->{details} =
+                      "Invalid ARC-Authentication-Results instance '$i'";
+                    return;
+                }
                 if ( $aar[$i] ) {
                     $self->{result} = 'skipped';
                     $self->{details} =
@@ -376,6 +406,12 @@ sub finish_header {
     }
 
     $self->{_Instance} = @as || 1;    # next instance value
+
+    if ( $self->{_Instance} > $Mail::DKIM::Canonicalization::seal::MAX_INSTANCE ) {
+        $self->{result}  = 'skipped';
+        $self->{details} = 'Too many ARC sets';
+        return;
+    }
 
     # first add the AAR header
     $self->{_AAR} = "ARC-Authentication-Results: i=$self->{_Instance}; $ar";
