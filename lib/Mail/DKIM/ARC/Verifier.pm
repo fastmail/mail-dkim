@@ -444,17 +444,26 @@ sub finish_header {
         return;
     }
 
+    # already failed in add_signature: drop the algorithms, since a seal
+    # canonicalization loops up to its signature's i= value, which may be
+    # the bad instance number that failed the chain
+    if ( $self->{result} ) {
+        $self->{algorithms} = [];
+        return;
+    }
+
     # check for duplicate AAR headers (dup AS and AMS checked in add_signature)
-    my @aars = [];
+    my %aars;
     foreach my $hdr ( @{ $self->{headers} } ) {
-        if ( my ($i) = $hdr =~ m{ARC-Authentication-Results:\s*i=(\d+)\s*;}i ) {
-            if ( defined $aars[$i] ) {
+        if ( my ($i) = $hdr =~ m{^ARC-Authentication-Results:\s*i=(\d+)\s*;}i ) {
+            $i =~ s{^0+(?=\d)}{};
+            if ( defined $aars{$i} ) {
                 $self->{result} = 'fail';
                 $self->{details} =
-                  "Duplicate ARC-Authentication-Results header $1";
+                  "Duplicate ARC-Authentication-Results header $i";
                 return;
             }
-            $aars[$i] = $hdr;
+            $aars{$i} = $hdr;
         }
     }
 
