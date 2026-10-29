@@ -6,11 +6,13 @@
 
 use strict;
 use warnings;
-use Test::More tests => 26;
+use Test::More tests => 27;
 use Time::HiRes qw(time);
 
 use Mail::DKIM::ARC::Verifier;
 use Mail::DKIM::ARC::Signer;
+use Mail::DKIM::ARC::Seal;
+use Mail::DKIM::Canonicalization::seal;
 
 my $tdir    = -f "t/test.key" ? "t" : ".";
 my $keyfile = "$tdir/test.key";
@@ -153,3 +155,16 @@ like( $arc->result_detail, qr/Invalid ARC-Seal instance/,
 $arc = sign( lc( arc_set(1) ) . $AR . $BODY );
 like( $arc->result_detail, qr/ARC header seen before Authentication-Results/,
     'signer sees lowercase ARC headers before Authentication-Results' );
+
+## Seal canonicalization takes the AAR instance from the start of the field
+
+{
+    my $seal = Mail::DKIM::ARC::Seal->parse(
+        'ARC-Seal: i=1; a=rsa-sha256; cv=none; d=example.com; s=s; b=');
+    my $canon = Mail::DKIM::Canonicalization::seal->new( Signature => $seal );
+    my $aar =
+      "ARC-Authentication-Results: i=1; example.com; dkim=pass header.d=x; i=7\015\012";
+    $canon->finish_header( Headers => [ $aar, sprintf( $AMS, 1 ) . "\015\012" ] );
+    like( $canon->result, qr/^arc-authentication-results:i=1; example\.com;.*i=7\015\012/m,
+        'AAR i=1 quoting "; i=7" is sealed as instance 1' );
+}

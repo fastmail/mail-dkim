@@ -56,8 +56,20 @@ sub init {
 # ARC limits instance numbers to 1..50 (RFC 8617 section 4.2.1)
 our $MAX_INSTANCE = 50;
 
-my @ARC_HEADERS =
-  qw(ARC-Authentication-Results ARC-Message-Signature ARC-Seal);
+# how to find the instance of each ARC header
+my %ARC_HEADERS = (
+
+    # i= comes first, and the rest is free text which may itself
+    # contain "; i=" (RFC 8617 section 4.1.1)
+    'arc-authentication-results' =>
+      qr/^ARC-Authentication-Results:\s*i=(\d+)\s*;/i,
+
+    # these are tag lists, so i= may be anywhere; this ugly pattern
+    # matches header: field; field; ... i=N
+    'arc-message-signature' =>
+      qr/^ARC-Message-Signature:\s*(?:[^;]*;\s*)*i=(\d+)/i,
+    'arc-seal' => qr/^ARC-Seal:\s*(?:[^;]*;\s*)*i=(\d+)/i,
+);
 
 # index the ARC headers by lowercased name and instance, keeping the
 # first of each, so each lookup doesn't have to scan the whole header
@@ -65,12 +77,10 @@ sub _index_headers {
     my ( $self, $headers ) = @_;
     my %index;
     foreach my $hdr (@$headers) {
-        foreach my $h (@ARC_HEADERS) {
-
-            # this ugly pattern matches header: field; field; ... i=N
-            next unless $hdr =~ m/^$h:\s*(?:[^;]*;\s*)*i=(\d+)/i;
+        foreach my $h ( keys %ARC_HEADERS ) {
+            next unless $hdr =~ $ARC_HEADERS{$h};
             ( my $i = $1 ) =~ s{^0+(?=\d)}{};
-            $index{ lc $h }{$i} = $hdr unless exists $index{ lc $h }{$i};
+            $index{$h}{$i} = $hdr unless exists $index{$h}{$i};
         }
     }
     return \%index;
