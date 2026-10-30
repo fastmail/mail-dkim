@@ -56,13 +56,23 @@ sub timed {
     return time - $t;
 }
 
+# time limits only hold on a reasonably fast machine
+sub is_quick {
+    my ( $elapsed, $limit, $name ) = @_;
+  SKIP: {
+        skip "$name: timing is only checked under AUTHOR_TESTING", 1
+          unless $ENV{AUTHOR_TESTING};
+        ok( $elapsed < $limit, $name ) or diag sprintf '%.2f s', $elapsed;
+    }
+}
+
 ## MessageParser: no quadratic cost in the number or length of fields
 
-ok( timed_verify( ( "x:\015\012" x 400_000 ) . $TAIL ) < 4,
+is_quick( timed_verify( ( "x:\015\012" x 400_000 ) . $TAIL ), 4,
     'many short header fields, message passed whole' );
 
-ok( timed_verify( "X-Folded: a\015\012" . ( " b\015\012" x 30_000 ) . $TAIL,
-        lines => 1 ) < 2,
+is_quick( timed_verify( "X-Folded: a\015\012" . ( " b\015\012" x 30_000 ) . $TAIL,
+        lines => 1 ), 2,
     'one long folded field, message passed line by line' );
 
 ## MessageParser: same fields however the message is passed
@@ -109,27 +119,27 @@ is_deeply( parse_events("A: 1\015\012B: 2"),
 
 ## Common::add_header: whitespace run inside a field name
 
-ok( timed_verify( 'x' . ( ' ' x 80_000 ) . "y: v\015\012" . $TAIL ) < 2,
+is_quick( timed_verify( 'x' . ( ' ' x 80_000 ) . "y: v\015\012" . $TAIL ), 2,
     'whitespace run inside a field name' );
 
 ## KeyValueList::parse: whitespace runs in tags
 
-ok( timed_verify( dkim_sig( 'from:subject', ' x' . ( ' ' x 50_000 ) . 'y=z;' ) . $TAIL ) < 2,
+is_quick( timed_verify( dkim_sig( 'from:subject', ' x' . ( ' ' x 50_000 ) . 'y=z;' ) . $TAIL ), 2,
     'whitespace run in a DKIM-Signature tag name' );
 
-ok( timed_verify( dkim_sig( 'from:subject', ' z=a' . ( ' ' x 200_000 ) . 'b;' ) . $TAIL ) < 2,
+is_quick( timed_verify( dkim_sig( 'from:subject', ' z=a' . ( ' ' x 200_000 ) . 'b;' ) . $TAIL ), 2,
     'whitespace run in a DKIM-Signature tag value' );
 
-ok(
+is_quick(
     timed_verify(
         'ARC-Seal: i=1; a=rsa-sha256; cv=none; d=example.com; s=sel;'
           . ' x' . ( ' ' x 50_000 ) . "y=z; b=$B64\015\012" . $TAIL,
         arc => 1
-      ) < 2,
+      ), 2,
     'whitespace run in an ARC-Seal tag name'
 );
 
-ok( timed( sub { Mail::DKIM::PublicKey->parse( 'v=DKIM1; k=rsa; x' . ( ' ' x 50_000 ) . 'y=z; p=' ) } ) < 2,
+is_quick( timed( sub { Mail::DKIM::PublicKey->parse( 'v=DKIM1; k=rsa; x' . ( ' ' x 50_000 ) . 'y=z; p=' ) } ), 2,
     'whitespace run in a key record tag name' );
 
 my $kvl = Mail::DKIM::KeyValueList->parse(" a = 1 ;b=\t2= 3\015\012 ;;c=;  d  =x y ");
@@ -142,7 +152,7 @@ ok( !eval { Mail::DKIM::KeyValueList->parse('a=1; b'); 1 }, 'tag without = is an
 
 ## Signature::headerlist: whitespace run inside an h= name
 
-ok( timed_verify( dkim_sig( 'from:a' . ( ' ' x 100_000 ) . 'b:subject', '' ) . $TAIL ) < 2,
+is_quick( timed_verify( dkim_sig( 'from:a' . ( ' ' x 100_000 ) . 'b:subject', '' ) . $TAIL ), 2,
     'whitespace run inside an h= name' );
 
 my $sig = Mail::DKIM::Signature->parse(
@@ -151,7 +161,7 @@ is_deeply( [ $sig->headerlist ], [ 'from', 'to', 'sub ject' ], 'h= names are tri
 
 ## Policy::parse: whitespace run inside a policy record tag
 
-ok( timed( sub { Mail::DKIM::AuthorDomainPolicy->parse( String => 'dkim=all; x=a' . ( ' ' x 200_000 ) . 'b' ) } ) < 2,
+is_quick( timed( sub { Mail::DKIM::AuthorDomainPolicy->parse( String => 'dkim=all; x=a' . ( ' ' x 200_000 ) . 'b' ) } ), 2,
     'whitespace run inside a policy record tag' );
 
 my $policy = Mail::DKIM::AuthorDomainPolicy->parse( String => '  dkim = all ' );

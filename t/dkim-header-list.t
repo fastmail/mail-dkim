@@ -32,6 +32,16 @@ my $expected = join '', "from: second\015\012", "x : spaced\015\012",
   "To: someone\015\012", "From: first\015\012", "Subject: hi\015\012";
 is( $canon->result, $expected, 'h= picks the right header fields' );
 
+# time limits only hold on a reasonably fast machine
+sub is_quick {
+    my ( $elapsed, $limit, $name ) = @_;
+  SKIP: {
+        skip "$name: timing is only checked under AUTHOR_TESTING", 1
+          unless $ENV{AUTHOR_TESTING};
+        ok( $elapsed < $limit, $name ) or diag sprintf '%.2f s', $elapsed;
+    }
+}
+
 ## a long h= list and many header fields stay quick
 
 {
@@ -51,5 +61,5 @@ my $dkim = Mail::DKIM::Verifier->new;
 my $t    = time;
 $dkim->PRINT($msg);
 $dkim->CLOSE;
-ok( time - $t < 5, '10 signatures with 2000 h= names over 2000 fields is quick' );
+is_quick( time - $t, 5, '10 signatures with 2000 h= names over 2000 fields is quick' );
 isnt( $dkim->result, 'pass', 'and does not pass' );

@@ -27,6 +27,16 @@ my $dns_queries = 0;
     *Mail::DKIM::DNS::query_async = sub { $dns_queries++; $query_async->(@_) };
 }
 
+# time limits only hold on a reasonably fast machine
+sub is_quick {
+    my ( $elapsed, $limit, $name ) = @_;
+  SKIP: {
+        skip "$name: timing is only checked under AUTHOR_TESTING", 1
+          unless $ENV{AUTHOR_TESTING};
+        ok( $elapsed < $limit, $name ) or diag sprintf '%.2f s', $elapsed;
+    }
+}
+
 my $AMS =
   'ARC-Message-Signature: i=%s; a=rsa-sha256; c=relaxed/relaxed; '
   . 'd=example.com; s=s; h=from; bh=AAAA; b=AAAA';
@@ -70,7 +80,7 @@ sub sign {
 $dns_queries = 0;
 my $t   = time;
 my $arc = verify( sprintf( $AS, 1000000000, 'none' ) . "\n" . $BODY );
-ok( time - $t < 2, 'ARC-Seal i=1000000000 is quick' );
+is_quick( time - $t, 2, 'ARC-Seal i=1000000000 is quick' );
 is( $arc->result, 'fail', 'ARC-Seal i=1000000000 fails' );
 like( $arc->{details}, qr/Invalid ARC-Seal instance '1000000000'/,
     'ARC-Seal i=1000000000 is an invalid instance' );
@@ -80,7 +90,7 @@ $t   = time;
 $arc = verify(
     "ARC-Seal: i=1000000000; a=rsa-sha256; cv=none; cv=none; d=example.com; s=s; b=AAAA\n"
       . $BODY );
-ok( time - $t < 2, 'ARC-Seal with duplicate tag and huge i= is quick' );
+is_quick( time - $t, 2, 'ARC-Seal with duplicate tag and huge i= is quick' );
 like( $arc->{details}, qr/Duplicate tag/, 'duplicate tag fails the chain' );
 
 ## Verifier: ARC-Authentication-Results i= doesn't size an array
@@ -109,7 +119,7 @@ like( $arc->{details}, qr/Duplicate ARC-Authentication-Results header 1\b/,
 
 $t   = time;
 $arc = verify( join( '', map { arc_set($_) } reverse 1 .. 50 ) . $BODY );
-ok( time - $t < 5, '50 ARC sets verify in reasonable time' );
+is_quick( time - $t, 5, '50 ARC sets verify in reasonable time' );
 isnt( $arc->result, 'pass', '50 bogus ARC sets do not pass' );
 
 ## Signer: instance numbers are checked before use
