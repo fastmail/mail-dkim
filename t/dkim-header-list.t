@@ -6,7 +6,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 3;
+use Test::More tests => 6;
 use Time::HiRes qw(time);
 
 use Mail::DKIM::Verifier;
@@ -32,6 +32,17 @@ my $expected = join '', "from: second\015\012", "x : spaced\015\012",
   "To: someone\015\012", "From: first\015\012", "Subject: hi\015\012";
 is( $canon->result, $expected, 'h= picks the right header fields' );
 
+# signatures sharing an index each take the fields from the bottom
+my %index;
+my @results;
+for ( 1 .. 2 ) {
+    my $c = Mail::DKIM::Canonicalization::simple->new( Signature => $signature );
+    $c->finish_header( Headers => \@headers, HeaderIndex => \%index );
+    push @results, $c->result;
+}
+is_deeply( \@results, [ $expected, $expected ],
+    'signatures sharing a header index pick the same fields' );
+
 # time limits only hold on a reasonably fast machine
 sub is_quick {
     my ( $elapsed, $limit, $name ) = @_;
@@ -44,9 +55,18 @@ sub is_quick {
 
 ## a long h= list and many header fields stay quick
 
+my ( $groupings, $added ) = ( 0, 0 );
 {
     no warnings 'redefine';
     *Mail::DKIM::DNS::query = sub { return () };
+
+    # count the work done for each signature rather than for the message
+    my $group = \&Mail::DKIM::Canonicalization::DkimCommon::_group_headers;
+    *Mail::DKIM::Canonicalization::DkimCommon::_group_headers =
+      sub { $groupings++; goto &$group };
+    my $add_header = \&Mail::DKIM::Algorithm::Base::add_header;
+    *Mail::DKIM::Algorithm::Base::add_header =
+      sub { $added++; goto &$add_header };
 }
 
 my $hlist = join ':', ('x') x 2000;
@@ -62,4 +82,6 @@ my $t    = time;
 $dkim->PRINT($msg);
 $dkim->CLOSE;
 is_quick( time - $t, 5, '10 signatures with 2000 h= names over 2000 fields is quick' );
+is( $groupings, 1, 'header fields are grouped by name once for all the signatures' );
+is( $added, 0, 'header fields are not passed to each signature one by one' );
 isnt( $dkim->result, 'pass', 'and does not pass' );

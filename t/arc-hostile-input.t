@@ -6,7 +6,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 33;
+use Test::More tests => 36;
 use Time::HiRes qw(time);
 
 use Mail::DKIM::ARC::Verifier;
@@ -25,6 +25,21 @@ my $dns_queries = 0;
     my $query_async = \&Mail::DKIM::DNS::query_async;
     *Mail::DKIM::DNS::query       = sub { return () };
     *Mail::DKIM::DNS::query_async = sub { $dns_queries++; $query_async->(@_) };
+}
+
+# count the work done for each signature rather than for the message
+my ( $seal_indexes, $groupings, $added ) = ( 0, 0, 0 );
+{
+    no warnings 'redefine';
+    my $index = \&Mail::DKIM::Canonicalization::seal::_index_headers;
+    *Mail::DKIM::Canonicalization::seal::_index_headers =
+      sub { $seal_indexes++; goto &$index };
+    my $group = \&Mail::DKIM::Canonicalization::DkimCommon::_group_headers;
+    *Mail::DKIM::Canonicalization::DkimCommon::_group_headers =
+      sub { $groupings++; goto &$group };
+    my $add_header = \&Mail::DKIM::Algorithm::Base::add_header;
+    *Mail::DKIM::Algorithm::Base::add_header =
+      sub { $added++; goto &$add_header };
 }
 
 # time limits only hold on a reasonably fast machine
@@ -117,9 +132,14 @@ like( $arc->{details}, qr/Duplicate ARC-Authentication-Results header 1\b/,
 
 ## Verifier: a chain at the 50 set limit is not too slow
 
+( $seal_indexes, $groupings, $added ) = ( 0, 0, 0 );
 $t   = time;
 $arc = verify( join( '', map { arc_set($_) } reverse 1 .. 50 ) . $BODY );
 is_quick( time - $t, 5, '50 ARC sets verify in reasonable time' );
+is( $seal_indexes, 1, 'ARC header fields are indexed once for all the seals' );
+is( $groupings, 1,
+    'header fields are grouped by name once for all the message signatures' );
+is( $added, 0, 'header fields are not passed to each signature one by one' );
 isnt( $arc->result, 'pass', '50 bogus ARC sets do not pass' );
 
 ## Signer: instance numbers are checked before use

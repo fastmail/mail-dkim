@@ -296,13 +296,18 @@ sub finish_header {
         );
     }
 
+    # share the header indexes between the signatures
+    my $index = {};
     foreach my $algorithm ( @{ $self->{algorithms} } ) {
 
         # output header as received so far into canonicalization
         foreach my $header ( @{ $self->{headers} } ) {
             $algorithm->add_header($header);
         }
-        $algorithm->finish_header( Headers => $self->{headers} );
+        $algorithm->finish_header(
+            Headers     => $self->{headers},
+            HeaderIndex => $index
+        );
     }
 }
 

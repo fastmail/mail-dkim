@@ -77,6 +77,7 @@ sub _index_headers {
     my ( $self, $headers ) = @_;
     my %index;
     foreach my $hdr (@$headers) {
+        next unless $hdr =~ /^ARC-/i;
         foreach my $h ( keys %ARC_HEADERS ) {
             next unless $hdr =~ $ARC_HEADERS{$h};
             ( my $i = $1 ) =~ s{^0+(?=\d)}{};
@@ -103,7 +104,12 @@ sub finish_header {
     $i =~ s{^0+(?=\d)}{};
     return if $i < 1 or $i > $MAX_INSTANCE;
 
-    my $index = $self->_index_headers( $args{Headers} );
+    # the index is shared through HeaderIndex by every seal on the message
+    my $index = $args{HeaderIndex} ? $args{HeaderIndex}{seal} : undef;
+    unless ($index) {
+        $index = $self->_index_headers( $args{Headers} );
+        $args{HeaderIndex}{seal} = $index if $args{HeaderIndex};
+    }
 
     my $chain = $args{Chain};
     $chain = $self->{Signature}->chain() if ! defined $chain;

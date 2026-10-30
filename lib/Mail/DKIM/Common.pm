@@ -25,7 +25,7 @@ sub add_header {
     my $self = shift;
     my ($line) = @_;
 
-    foreach my $algorithm ( @{ $self->{algorithms} } ) {
+    foreach my $algorithm ( @{ $self->{header_algorithms} || [] } ) {
         $algorithm->add_header($line);
     }
 
