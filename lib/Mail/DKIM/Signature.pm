@@ -644,7 +644,7 @@ sub headerlist {
 
     if ( wantarray and $h ) {
         my @list = split /:/, $h;
-        @list = map { s/^\s+|\s+$//g; $_ } @list;
+        @list = map { s/^\s+//; s/\s+$//; $_ } @list;    # not s/^\s+|\s+$//g, quadratic
         return @list;
     }
     elsif (wantarray) {
