@@ -6,7 +6,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 36;
+use Test::More tests => 39;
 use Time::HiRes qw(time);
 
 use Mail::DKIM::ARC::Verifier;
@@ -129,6 +129,39 @@ like( $arc->{details}, qr/Duplicate ARC-Authentication-Results header 1\b/,
 $arc = verify( "arc-authentication-results:\n i=1 ; x\n" . arc_set(1) . $BODY );
 like( $arc->{details}, qr/Duplicate ARC-Authentication-Results header 1\b/,
     'folded AAR in another case is a duplicate' );
+
+## ARC-Seal canonicalization: a whitespace run in an ARC header with no i=
+
+$t = time;
+verify( arc_set(1) . 'ARC-Seal: a=b;' . ( ' ' x 100_000 ) . "x\n" . $BODY );
+is_quick( time - $t, 2, 'whitespace run after ; in an ARC-Seal with no i= is quick' );
+
+$t = time;
+verify( arc_set(1)
+      . 'ARC-Message-Signature: a=b;'
+      . ( ' ' x 100_000 ) . "x\n"
+      . $BODY );
+is_quick( time - $t, 2,
+    'whitespace run after ; in an ARC-Message-Signature with no i= is quick' );
+
+my $index = Mail::DKIM::Canonicalization::seal->_index_headers(
+    [
+        "ARC-Seal: i=1; a=rsa-sha256\015\012",
+        "ARC-Seal: a=rsa-sha256; d=example.com;\015\012\ti=2; b=\015\012",
+        "arc-seal:a=b;i=3\015\012",
+        "ARC-Seal: a=b; xi=4\015\012",
+        "ARC-Seal: a=b;   x\015\012",
+        "ARC-Message-Signature: a=b;  \t i=05; c=d\015\012",
+    ]
+);
+is_deeply(
+    { map { $_ => [ sort keys %{ $index->{$_} } ] } keys %$index },
+    {
+        'arc-seal'              => [ 1, 2, 3 ],
+        'arc-message-signature' => [5],
+    },
+    'ARC-Seal and ARC-Message-Signature instances are found after any tag'
+);
 
 ## Verifier: a chain at the 50 set limit is not too slow
 

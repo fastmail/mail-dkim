@@ -28,6 +28,8 @@ This file summarizes what's changed between releases of Mail-DKIM.
     fields, by indexing the header once for all the signatures
     Thanks to Sidney Markowitz <sidney@apache.org> and the
     Apache SpamAssassin PMC
+  * Fix slow matching of ARC-Seal and ARC-Message-Signature headers with
+    a long run of whitespace and no i= tag
 
 1.20240923 2024-09-23 Australia/Melbourne
   * Fix loading of ED25519 keys with CryptX-0.081

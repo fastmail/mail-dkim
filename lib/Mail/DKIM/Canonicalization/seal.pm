@@ -66,9 +66,11 @@ my %ARC_HEADERS = (
 
     # these are tag lists, so i= may be anywhere; this ugly pattern
     # matches header: field; field; ... i=N
+    # (not (?:[^;]*;\s*)*, where whitespace after a ; can be taken by
+    # either part, which is quadratic in a whitespace run)
     'arc-message-signature' =>
-      qr/^ARC-Message-Signature:\s*(?:[^;]*;\s*)*i=(\d+)/i,
-    'arc-seal' => qr/^ARC-Seal:\s*(?:[^;]*;\s*)*i=(\d+)/i,
+      qr/^ARC-Message-Signature:(?:[^;]*;)*\s*i=(\d+)/i,
+    'arc-seal' => qr/^ARC-Seal:(?:[^;]*;)*\s*i=(\d+)/i,
 );
 
 # index the ARC headers by lowercased name and instance, keeping the
