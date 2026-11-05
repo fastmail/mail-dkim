@@ -73,6 +73,18 @@ my %ARC_HEADERS = (
     'arc-seal' => qr/^ARC-Seal:(?:[^;]*;)*\s*i=(\d+)/i,
 );
 
+# the instance of an ARC-Authentication-Results header field as this
+# canonicalization finds it, without leading zeros, or undef if it finds
+# none; the verifier and signer use this so that every field they accept
+# as an AAR is one the seals cover
+sub _aar_instance {
+    my ($header) = @_;
+    my ($i) = $header =~ $ARC_HEADERS{'arc-authentication-results'}
+      or return;
+    $i =~ s{^0+(?=\d)}{};
+    return $i;
+}
+
 # index the ARC headers by lowercased name and instance, keeping the
 # first of each, so each lookup doesn't have to scan the whole header
 sub _index_headers {

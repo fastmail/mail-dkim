@@ -374,8 +374,18 @@ sub finish_header {
                 }
                 $ams[$i] = $sig;
             }
-            elsif ( $header =~ m/^ARC-Authentication-Results:\s*i=(\d+)/i ) {
-                my $i = $1;
+            elsif ( $header =~ m/^ARC-Authentication-Results\s*:/i ) {
+
+                # take the instance as the seal canonicalization does, so
+                # every AAR here is one the seals cover
+                my $i =
+                  Mail::DKIM::Canonicalization::seal::_aar_instance($header);
+                unless ( defined $i ) {
+                    $self->{result} = 'skipped';
+                    $self->{details} =
+                      'Unparseable ARC-Authentication-Results header';
+                    return;
+                }
                 unless ( _valid_instance($i) ) {
                     $self->{result} = 'skipped';
                     $self->{details} =

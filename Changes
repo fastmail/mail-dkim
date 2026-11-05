@@ -30,6 +30,10 @@ This file summarizes what's changed between releases of Mail-DKIM.
     Apache SpamAssassin PMC
   * Fix slow matching of ARC-Seal and ARC-Message-Signature headers with
     a long run of whitespace and no i= tag
+  * ARC verifier fails a chain with an ARC-Authentication-Results header
+    whose instance can't be found or is outside 1..50, rather than
+    ignoring it, so an AAR not covered by the seals can't sit alongside
+    a passing chain; the ARC signer skips such a message
 
 1.20240923 2024-09-23 Australia/Melbourne
   * Fix loading of ED25519 keys with CryptX-0.081

@@ -111,6 +111,7 @@ If true, rejects sha1 hashes and signing keys shorter than 1024 bits.
 use base 'Mail::DKIM::Common';
 use Mail::DKIM::ARC::MessageSignature;
 use Mail::DKIM::ARC::Seal;
+use Mail::DKIM::Canonicalization::seal;
 use Mail::Address;
 use Carp;
 our $MAX_SIGNATURES_TO_PROCESS = 50;
@@ -456,19 +457,33 @@ sub finish_header {
         return;
     }
 
-    # check for duplicate AAR headers (dup AS and AMS checked in add_signature)
+    # check the AAR headers: each must have an instance the seal
+    # canonicalization finds, since one it doesn't is covered by no seal
+    # but may still be read as part of the chain (e.g. "i = 1", which
+    # RFC 8617 allows), and there must be no duplicates (dup AS and AMS
+    # checked in add_signature)
     my %aars;
     foreach my $hdr ( @{ $self->{headers} } ) {
-        if ( my ($i) = $hdr =~ m{^ARC-Authentication-Results:\s*i=(\d+)\s*;}i ) {
-            $i =~ s{^0+(?=\d)}{};
-            if ( defined $aars{$i} ) {
-                $self->{result} = 'fail';
-                $self->{details} =
-                  "Duplicate ARC-Authentication-Results header $i";
-                return;
-            }
-            $aars{$i} = $hdr;
+        next unless $hdr =~ m{^ARC-Authentication-Results\s*:}i;
+        my $i = Mail::DKIM::Canonicalization::seal::_aar_instance($hdr);
+        if ( !defined $i ) {
+            $self->{result}  = 'fail';
+            $self->{details} = 'Unparseable ARC-Authentication-Results header';
+            return;
         }
+        if ( $i < 1 or $i > $MAX_SIGNATURES_TO_PROCESS ) {
+            $self->{result} = 'fail';
+            $self->{details} =
+              "Invalid ARC-Authentication-Results instance '$i'";
+            return;
+        }
+        if ( defined $aars{$i} ) {
+            $self->{result} = 'fail';
+            $self->{details} =
+              "Duplicate ARC-Authentication-Results header $i";
+            return;
+        }
+        $aars{$i} = $hdr;
     }
     $self->{aars} = \%aars;
 
