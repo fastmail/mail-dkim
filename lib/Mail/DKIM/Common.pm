@@ -25,11 +25,12 @@ sub add_header {
     my $self = shift;
     my ($line) = @_;
 
-    foreach my $algorithm ( @{ $self->{algorithms} } ) {
+    foreach my $algorithm ( @{ $self->{header_algorithms} || [] } ) {
         $algorithm->add_header($line);
     }
 
-    if ( $line =~ /^([^:]+?)\s*:(.*)/s ) {
+    # not /^([^:]+?)\s*:/, which is quadratic in a whitespace run
+    if ( $line =~ /^([^:]*[^\s:])\s*:(.*)/s ) {
         my $field_name = lc $1;
         my $contents   = $2;
         $self->handle_header( $field_name, $contents, $line );

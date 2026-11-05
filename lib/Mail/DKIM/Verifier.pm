@@ -218,15 +218,11 @@ sub add_signature {
         Debug_Canonicalization => $self->{Debug_Canonicalization},
     );
 
-    # push through the headers parsed prior to the signature header
-    if ( $algorithm->wants_pre_signature_headers ) {
-
-        # Note: this will include the signature header that led to this
-        # "algorithm"...
-        foreach my $head ( @{ $self->{headers} } ) {
-            $algorithm->add_header($head);
-        }
-    }
+    # an algorithm that wants the headers prior to the signature header
+    # canonicalizes the whole header from finish_header(), so only the
+    # others need each header field as it is parsed
+    push @{ $self->{header_algorithms} }, $algorithm
+      unless $algorithm->wants_pre_signature_headers;
 
     # save the algorithm
     $self->{algorithms} ||= [];
@@ -400,8 +396,13 @@ sub finish_header {
         return;
     }
 
+    # share the header indexes between the signatures
+    my $index = {};
     foreach my $algorithm ( @{ $self->{algorithms} } ) {
-        $algorithm->finish_header( Headers => $self->{headers} );
+        $algorithm->finish_header(
+            Headers     => $self->{headers},
+            HeaderIndex => $index
+        );
     }
 
     # stop processing signatures that are already known to be invalid

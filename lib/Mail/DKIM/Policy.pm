@@ -111,8 +111,9 @@ sub parse {
     my %tags;
     foreach my $tag ( split /;/, $text ) {
 
-        # strip whitespace
-        $tag =~ s/^\s+|\s+$//g;
+        # strip whitespace (not s/^\s+|\s+$//g, which is quadratic)
+        $tag =~ s/^\s+//;
+        $tag =~ s/\s+$//;
 
         my ( $tagname, $value ) = split /=/, $tag, 2;
         unless ( defined $value ) {

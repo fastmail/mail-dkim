@@ -160,6 +160,13 @@ canonicalization object has its own copy of the header.
 The headers array is an array of one element per header field, with
 the headers not processed/canonicalized in any way.
 
+  $method->finish_header(Headers => \@all_headers, HeaderIndex => \%index);
+
+When several canonicalization objects are finished with the same
+headers, pass the same empty hash as HeaderIndex to each of them, so
+that the header is indexed once for all of them rather than once for
+each.
+
 =head2 result()
 
   my $result = $method->result;
