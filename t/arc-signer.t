@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::Simple tests => 12;
+use Test::Simple tests => 14;
 
 use Mail::DKIM::ARC::Signer;
 
@@ -145,3 +145,24 @@ ok($arc->result() eq 'sealed', 'result() is sealed');
 ok($as =~ m/\bcv=fail\b/, 'AS has cv=fail');
 ok($aar =~ m/\Q example.org;\E\015\012\Q  arc=fail (bad something);\E\015\012\Q  spf=pass smtp.mailfrom=\E/,
    'AAR has AR contents and expected formatting');
+
+## the most recent ARC-Seal has cv=fail: not sealed again (RFC 8617,
+## section 5.1, step 2)
+
+my $failed_chain = $arc->as_string() . $sample_email;
+$failed_chain = "Authentication-Results: example.org; arc=fail\015\012"
+  . $failed_chain;
+
+$arc = Mail::DKIM::ARC::Signer->new(
+    Algorithm => "rsa-sha256",
+    Domain    => "example.org",
+    Selector  => "test",
+    Chain     => "ar",
+    KeyFile   => $keyfile
+);
+
+$arc->PRINT($failed_chain);
+$arc->CLOSE;
+
+ok($arc->result() eq 'skipped', 'result() is skipped after a cv=fail seal');
+ok($arc->result_detail() =~ /cv=fail/, 'result_detail() says why');
