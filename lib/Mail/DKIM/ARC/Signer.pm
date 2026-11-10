@@ -141,7 +141,7 @@ the extended_headers() method instead.
 
 The list of headers signed by default is as follows
 
-    From Sender Reply-To Subject Date
+    DKIM-Signature From Sender Reply-To Subject Date
     Message-ID To Cc MIME-Version
     Content-Type Content-Transfer-Encoding Content-ID Content-Description
     Resent-Date Resent-From Resent-Sender Resent-To Resent-cc
@@ -729,8 +729,9 @@ will be signed, separated by colons.
 =cut
 
 # these are headers that "should" be included in the signature,
-# according to the DKIM spec.
-my @DEFAULT_HEADERS = qw(From Sender Reply-To Subject Date
+# according to the DKIM spec, and DKIM-Signature, which the ARC spec says
+# the ARC-Message-Signature should include (RFC 8617, section 4.1.2)
+my @DEFAULT_HEADERS = qw(DKIM-Signature From Sender Reply-To Subject Date
   Message-ID To Cc MIME-Version
   Content-Type Content-Transfer-Encoding Content-ID Content-Description
   Resent-Date Resent-From Resent-Sender Resent-To Resent-cc

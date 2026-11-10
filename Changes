@@ -1,6 +1,8 @@
 This file summarizes what's changed between releases of Mail-DKIM.
 
 {{$NEXT}}
+  * ARC signer covers DKIM-Signature header fields in the
+    ARC-Message-Signature by default (RFC 8617, section 4.1.2)
   * Don't canonicalize ARC-Seals once the ARC chain has failed, and only
     match ARC-Authentication-Results at the start of a header field
     Thanks to Sidney Markowitz <sidney@apache.org> and the
