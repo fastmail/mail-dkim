@@ -1,6 +1,8 @@
 This file summarizes what's changed between releases of Mail-DKIM.
 
 {{$NEXT}}
+  * ARC signer doesn't seal a message whose most recent ARC-Seal already
+    has cv=fail (RFC 8617, section 5.1, step 2)
   * Don't canonicalize ARC-Seals once the ARC chain has failed, and only
     match ARC-Authentication-Results at the start of a header field
     Thanks to Sidney Markowitz <sidney@apache.org> and the

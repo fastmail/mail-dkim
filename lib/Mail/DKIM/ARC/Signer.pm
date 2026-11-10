@@ -438,6 +438,14 @@ sub finish_header {
         # don't care about authentication results, they are compulsary
     }
 
+    # a chain whose most recent ARC-Seal already says cv=fail isn't sealed
+    # again (RFC 8617, section 5.1, step 2)
+    if ( @as && ( $as[-1]->chain // '' ) eq 'fail' ) {
+        $self->{result}  = 'skipped';
+        $self->{details} = 'Most recent ARC-Seal has cv=fail';
+        return;
+    }
+
     $self->{_Instance} = @as || 1;    # next instance value
 
     if ( $self->{_Instance} > $Mail::DKIM::Canonicalization::seal::MAX_INSTANCE ) {
