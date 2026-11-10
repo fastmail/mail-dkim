@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::Simple tests => 12;
+use Test::Simple tests => 14;
 
 use Mail::DKIM::ARC::Signer;
 
@@ -145,3 +145,34 @@ ok($arc->result() eq 'sealed', 'result() is sealed');
 ok($as =~ m/\bcv=fail\b/, 'AS has cv=fail');
 ok($aar =~ m/\Q example.org;\E\015\012\Q  arc=fail (bad something);\E\015\012\Q  spf=pass smtp.mailfrom=\E/,
    'AAR has AR contents and expected formatting');
+
+## the ARC-Message-Signature covers DKIM-Signature header fields (RFC 8617,
+## section 4.1.2), but not Authentication-Results or ARC header fields
+
+$sample_email = <<END_OF_SAMPLE;
+Authentication-Results: example.org; dkim=pass header.d=example.org
+DKIM-Signature: v=1; a=rsa-sha256; d=example.org; s=test; h=from; bh=x; b=x
+From: jason <jason\@example.org>
+Subject: hi there
+
+this is a sample message
+END_OF_SAMPLE
+$sample_email =~ s/\n/\015\012/gs;
+
+$arc = Mail::DKIM::ARC::Signer->new(
+    Algorithm => "rsa-sha256",
+    Domain    => "example.org",
+    Selector  => "test",
+    Chain     => "ar",
+    KeyFile   => $keyfile
+);
+
+$arc->PRINT($sample_email);
+$arc->CLOSE;
+
+($as, $ams, $aar) = $arc->as_strings();
+my ($h) = $ams =~ /\bh=([^;]*)/;
+$h =~ s/\s+//g;
+ok($h =~ /(^|:)dkim-signature(:|$)/i, 'AMS covers DKIM-Signature');
+ok($h !~ /authentication-results|arc-/i,
+   'AMS does not cover Authentication-Results or ARC header fields');
