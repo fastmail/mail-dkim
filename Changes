@@ -1,6 +1,9 @@
 This file summarizes what's changed between releases of Mail-DKIM.
 
 {{$NEXT}}
+  * Ignore a policy record that doesn't parse, as if there were no
+    record, instead of dying (RFC 5617, section 4.2.1). A domain with a
+    wildcard TXT record made policies() die for all its messages.
   * Don't canonicalize ARC-Seals once the ARC chain has failed, and only
     match ARC-Authentication-Results at the start of a header field
     Thanks to Sidney Markowitz <sidney@apache.org> and the

@@ -88,10 +88,19 @@ sub fetch_async {
             return $on_success->( $class->default );
         }
 
-        my $self = $class->parse(
-            String => $strn,
-            Domain => $prms{Domain},
-        );
+        # a record that doesn't parse, such as a wildcard TXT record
+        # that also answers for the policy name, is ignored like no
+        # record at all (RFC 5617, section 4.2.1; draft-ietf-dkim-ssp-02,
+        # section 3.1.1)
+        my $self = eval {
+            $class->parse(
+                String => $strn,
+                Domain => $prms{Domain},
+            );
+        };
+        unless ($self) {
+            return $on_success->( $class->default );
+        }
         return $on_success->($self);
     };
 
