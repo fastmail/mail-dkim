@@ -1,6 +1,8 @@
 This file summarizes what's changed between releases of Mail-DKIM.
 
 {{$NEXT}}
+  * ARC verifier's result_detail gives the reason the chain failed, as
+    documented, instead of the result of each signature
   * Don't canonicalize ARC-Seals once the ARC chain has failed, and only
     match ARC-Authentication-Results at the start of a header field
     Thanks to Sidney Markowitz <sidney@apache.org> and the

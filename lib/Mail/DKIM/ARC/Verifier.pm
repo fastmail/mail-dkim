@@ -683,7 +683,7 @@ sub finish_body {
         if ( $result ne 'pass' ) {
             $self->{signature} = $seals->[$i]->signature;
             $self->{result}    = $result;
-            $self->{details}   = $seals->[$i]->result_detail();
+            $self->{details}   = $seals->[$i]->{verify_details};
             return;
         }
     }
@@ -713,35 +713,23 @@ sub finish_body {
     if ( $result ne 'pass' ) {
         $self->{signature} = $messages->[$#$seals]->signature;
         $self->{result}    = $result;
-        $self->{details}   = $messages->[$#$seals]->result_detail();
+        $self->{details}   = $messages->[$#$seals]->{verify_details};
         return;
     }
 
     # Success!
     $self->{signature} = $seals->[$#$seals]->signature();
     $self->{result}    = 'pass';
-    $self->{details}   = $seals->[$#$seals]->result_detail();
+    $self->{details}   = $seals->[$#$seals]->{verify_details};
 }
 
 sub result_detail {
     my $self = shift;
+    croak 'wrong number of arguments' unless ( @_ == 0 );
 
-    return 'none' if $self->{result} eq 'none';
-
-    my @items;
-    foreach my $signature ( @{ $self->{signatures} } ) {
-        my $type =
-            ref($signature) eq 'Mail::DKIM::ARC::Seal'             ? 'as'
-          : ref($signature) eq 'Mail::DKIM::ARC::MessageSignature' ? 'ams'
-          :   ref($signature);
-        push @items,
-            "$type."
-          . ( $signature->instance()      || '' ) . '.'
-          . ( $signature->domain()        || '(none)' ) . '='
-          . ( $signature->result_detail() || '?' );
-    }
-
-    return $self->{result} . ' (' . join( ', ', @items ) . ')';
+    # "none" has a detail, but it only repeats the result
+    return 'none' if ( $self->{result} // '' ) eq 'none';
+    return $self->SUPER::result_detail();
 }
 
 =head1 METHODS
@@ -868,12 +856,17 @@ Access the result, plus details if available.
   my $detail = $dkim->result_detail;
 
 The detail is constructed by taking the result (e.g. "pass", "fail",
-"invalid" or "none") and appending any details provided by the verification
-process for the topmost ARC-Seal in parenthesis.
+"invalid" or "none") and appending the reason the chain failed, if it
+did, in parenthesis: the structural problem found in the chain, or the
+details from verifying the ARC-Seal or ARC-Message-Signature that failed.
 
 The following are possible results from the result_detail() method:
 
   pass
+  fail (missing ARC-Seal 2)
+  fail (missing ARC-Authentication-Results 1)
+  fail (first ARC-Seal must be cv=none)
+  fail (wrong cv for ARC-Seal i=2)
   fail (bad RSA signature)
   fail (OpenSSL error: ...)
   fail (message has been altered)
