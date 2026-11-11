@@ -681,7 +681,7 @@ sub finish_body {
     foreach my $i ( 1 .. $#$seals ) {
         my $result = $seals->[$i]->result();
         if ( $result ne 'pass' ) {
-            $self->{signature} = $seals->[$i]->signature;
+            $self->{signature} = $seals->[$i];
             $self->{result}    = $result;
             $self->{details}   = $seals->[$i]->result_detail();
             return;
@@ -692,7 +692,7 @@ sub finish_body {
     #        of "pass" (except the first which MUST be "none"); and
     my $cv = $seals->[1]->get_tag('cv');
     if ( !defined $cv or $cv ne 'none' ) {
-        $self->{signature} = $seals->[1]->signature;
+        $self->{signature} = $seals->[1];
         $self->{result}    = 'fail';
         $self->{details}   = 'first ARC-Seal must be cv=none';
         return;
@@ -700,7 +700,7 @@ sub finish_body {
     foreach my $i ( 2 .. $#$seals ) {
         my $cv = $seals->[$i]->get_tag('cv');
         if ( !defined $cv or $cv ne 'pass' ) {
-            $self->{signature} = $seals->[$i]->signature;
+            $self->{signature} = $seals->[$i];
             $self->{result}    = 'fail';
             $self->{details}   = "wrong cv for ARC-Seal i=$i";
             return;
@@ -711,14 +711,14 @@ sub finish_body {
     #        validate.
     my $result = $messages->[$#$seals]->result();
     if ( $result ne 'pass' ) {
-        $self->{signature} = $messages->[$#$seals]->signature;
+        $self->{signature} = $messages->[$#$seals];
         $self->{result}    = $result;
         $self->{details}   = $messages->[$#$seals]->result_detail();
         return;
     }
 
     # Success!
-    $self->{signature} = $seals->[$#$seals]->signature();
+    $self->{signature} = $seals->[$#$seals];
     $self->{result}    = 'pass';
     $self->{details}   = $seals->[$#$seals]->result_detail();
 }
@@ -903,6 +903,18 @@ The following are possible results from the result_detail() method:
   invalid (public key: granularity is empty)
   invalid (public key: OpenSSL error: ...)
   none
+
+=head2 signature()
+
+Access the signature that decided the result.
+
+  my $sig = $arc->signature;
+
+For a chain that passes, this is the most recent ARC-Seal. For a chain
+that fails because an ARC-Seal or ARC-Message-Signature did, it is that
+signature. The returned object is a L<Mail::DKIM::ARC::Seal> or a
+L<Mail::DKIM::ARC::MessageSignature>. For a chain that fails for a
+structural reason, it may be undefined, or any of the chain's signatures.
 
 =head2 signatures()
 
