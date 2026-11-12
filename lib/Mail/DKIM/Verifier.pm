@@ -317,6 +317,31 @@ sub check_signature {
         return 0;
     }
 
+    # DomainKeys signatures have no bh= tag, and their h= tag is optional
+    return 1 if $signature->isa('Mail::DKIM::DkSignature');
+
+    unless ( $signature->body_hash ) {
+
+        # no body hash, so the signature wouldn't cover the body
+        $self->{signature_reject_reason} = 'missing bh tag';
+        return 0;
+    }
+
+    my @headers = $signature->headerlist;
+    unless (@headers) {
+
+        # no signed header fields (RFC 6376, 3.5: h= MUST NOT be empty)
+        $self->{signature_reject_reason} = 'missing h tag';
+        return 0;
+    }
+
+    unless ( grep { $_ eq 'from' } @headers ) {
+
+        # RFC 6376, 6.1.1: a signature that doesn't cover From is ignored
+        $self->{signature_reject_reason} = 'From field not signed';
+        return 0;
+    }
+
     return 1;
 }
 

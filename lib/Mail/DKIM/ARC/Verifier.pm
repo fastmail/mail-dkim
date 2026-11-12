@@ -76,6 +76,18 @@ https://tools.ietf.org/html/draft-ietf-dmarc-arc-protocol-06 -
 if ALL ARC-Seal headers pass and the highest index (i=)
 ARC-Message-Signature passes, then the seal is intact.
 
+=head2 ARC-Message-Signature h= tag
+
+RFC 8617, 4.1.2 gives the ARC-Message-Signature the semantics of a
+DKIM-Signature, which suggests that its h= tag, like that of a
+DKIM-Signature (RFC 6376, 3.5 and 6.1.1), must not be empty and must
+include From. Unlike L<Mail::DKIM::Verifier>, this verifier does not
+enforce that: an ARC-Message-Signature with an empty or missing h= tag
+covers no header fields, but can still pass. This follows the ARC
+draft validation test suite, which expects an empty h= to pass
+(ams_fields_h_empty). The bh= tag is required, so the body is always
+covered, and the ARC-Seal covers the ARC-Message-Signature itself.
+
 =head1 CONSTRUCTOR
 
 =head2 new()
@@ -535,6 +547,9 @@ sub _check_and_verify_signature {
             $self->{signature_reject_reason} = 'missing BH tag';
             return ( 'fail', $self->{signature_reject_reason} );
         }
+
+        # an empty or missing h= is accepted, unlike in a DKIM-Signature,
+        # as the ARC test suite expects; see "ARC-Message-Signature h= tag"
         if ( ( $signature->get_tag('h') || '' ) =~ /arc-seal/i )
         {                                         # cannot cover AS
             $self->{signature_reject_reason} =

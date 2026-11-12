@@ -44,10 +44,10 @@ sub finish_header {
     #
     # This is described in 5.4 of RFC4871.
 
-    # presence of a h= tag is mandatory...
-    unless ( defined $self->{Signature}->headerlist ) {
-        die "Error: h= tag is required for this canonicalization\n";
-    }
+    # Mail::DKIM::Verifier rejects a DKIM signature without a usable h=
+    # tag before it gets here. An ARC-Message-Signature with an empty h=
+    # is canonicalized as it is (see Mail::DKIM::ARC::Verifier), and the
+    # signer sets h= after this has run.
 
     # the message headers grouped by name, bottom-up, so each name in h=
     # costs one lookup rather than a scan of the header; the grouping is
