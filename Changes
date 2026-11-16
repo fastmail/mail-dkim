@@ -1,6 +1,8 @@
 This file summarizes what's changed between releases of Mail-DKIM.
 
 {{$NEXT}}
+
+1.20261116 2026-11-17 Australia/Melbourne
   * Security: the verifier now rejects (result "invalid") a
     DKIM-Signature that has no h= tag or an empty one, whose h= tag
     doesn't include From, or that has no bh= tag, as RFC 6376 requires.
